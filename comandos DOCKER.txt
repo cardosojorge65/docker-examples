@@ -1,0 +1,161 @@
+docker run nome-da-imagem 		-> cria um container com a imagem(baixa ela automaticamente caso necessário)
+docker run -d nome-da-imagem		-> roda container em modo desatachado, sem bloquear terminal
+docker run -it nome-da-imagem		-> cria um container atrelando o terminal a ele
+docker run -d -P nome-da-imagem		-> o parametro -P, disponibiliza a aplicação do container em alguma porta aleatória para acesso externo, visivel no docker ps
+docker run -d -p 12345:80 nome-imagem	-> diferente do -P(maiusculo), o parametro -p(minusculo) permite que seja escolhida a porta a ser utilizada
+
+
+docker run -d -O --name nome-do-container nome-da-imagem	-> com o parametro --name nome-do-container é possível escolher um nome para o container
+docker run -e AUTHOR="JORGE" nome-imagem			-> o parametro -e permite inserir uma variável de ambiente no container. No exemplo foi inserido a variável AUTHOR com o valor "JORGE"
+
+
+touch nome-do-arquivo.extensão				-> cria um arquivo dentro do diretório atual, com o nome e extensão informados
+echo "insira um texto aqui" > nome-do-arquivo.txt	-> insere o texto entre aspas no arquivo .txt apontado
+
+
+docker ps 				-> lista todos os containers ativos
+docker ps -a 				-> lista todos os containers parados
+docker ps -q				-> lista apenas os ID's dos containers ativos
+docker stop $(docker ps -q)		-> pausa todos os containers, visto que está recebendo como parametro o id dos containers ativos
+docker-machine ip			-> exibe o IP do container
+
+docker start id-do-container		-> "liga" o container, tornando-o ativo
+docker stop id-do-container 		-> "desliga" o container
+docker start -i id-do-container 	-> starta um container existente, atrelando o terminal à ele
+docker rm id-do-container		-> remove um container específico
+docker container prune			-> remove todos container inativos
+docker images				-> lista imagens instaladas
+docker rmi nome-da-imagem		-> remove imagem
+docker port id-do-container		-> exibe quais portas estão sendo utilizadas pelo container
+
+docker run -p 8080:3000...		-> através da tag -p 8080:3000, informamos ao docker que iremos usar a porta 8080 da maquina fisica, para acessar a aplicação da porta 3030 do container
+
+docker run node -w "/var/www" npm start		-> quando queremos usar um comando após o container subir, basta incluí-lo ao final da linha de comando, conforme exemplo em que solicitamos que suba o servidor node através do npm start. Porém, o container inicia no diretório raíz. Para que o container acesse o diretório correto para executar o comando, usamos o recurso -w "diretório-do-volume", que no caso do exemplo usamos o /var/www
+
+
+ctrl + d				-> sai do container. O mesmo passa para o estado inativo
+$(pwd)					-> exibe o diretório atual. Pode ser usado para interpolação dentro de aspas, em comandos que precisem do diretório atual
+
+
+################ VOLUMES SÃO DIRETÓRIOS CRIADOS PARA PERSISTIR DADOS COM CONTAINERS ##################################
+docker run -v "/var/www" nome-da-imagem		-> o comando -v "/var/www" cria um volume no diretório entre aspas para os containers que subirem na imagem especificada
+docker inspect id-do-container			-> lista informações sobre o container. O objeto Mounts exibe no campo Source o diretório real em que o volume criado é persistido
+docker run -v "diretório_local:diretorio_volume" nome-da-imagem	-> é possível escolher um diretório fisico para persistir seu volume, informando o diretório + ":" + volume. A partir deste diretório, tudo que estiver acessível ao container(dentro do diretório criado) estará também para a maquina física, e vice e versa
+
+################ DOCKER FILE EXEMPLO #####################
+
+FROM node:latest    			//// imagem que será usada como base
+MAINTAINER jorge-cardoso		//// autor da imagem
+ENV NODE_ENV=production			//// ENV é utilizado para settar variáveis... por exemplo com a variável PORT=3000, poderiamos substituir o valor 3000 no campo EXPOSE ENV PORT=3000				//// por PORT. Exemplo: EXPOSE PORT
+COPY . /var/www				//// copia tudo da pasta raiz atual ".", para o volume especificado "/var/www"
+WORKDIR /var/www			//// diretório em que deverão ser executados os comandos, o "diretório de trabalho"
+RUN npm install				//// comando a ser executado para instalar as dependências do projeto, quando a imagem estiver sendo construída
+ENTRYPOINT npm start			//// comando a ser executado após construção da imagem, no caso, para iniciar o projeto node
+EXPOSE 3000				//// comando para expor que a aplicação do container usa a porta 3000
+
+
+este arquivo é inserido no projeto, com o nome Dockerfile, ou com uma extensão dockerfile (ex: node.dockerfile)
+
+docker build -f Dockerfile -t jorge-cardoso/node . 		-> neste comando estamos buildando a imagem conforme instruções do arquivo Dockerfile. 
+								   A tag -f seguida de Dockerfile serve para apontar o arquivo. Caso tivessemos nomeado de node.dockerfile, deveriamos informar -f node.dockerfile
+								   a tag -t jorge-cardoso/node serve para nomear nossa imagem, seguindo o padrão: nome-do-autor/nome-da-imagem
+								   O "." serve para informar o "contexto", ou seja, o diretório a ser executado, que no caso é na raiz do projeto em que estamos
+								   (certificar de estar no diretório antes de dar o comando)
+
+
+########################################## SUBINDO IMAGENS NO DOCKERHUB ################################################################################
+
+docker login			-> a partir deste comando ele solicitará seu usuário e senha do dockerhub
+docker push nome-da-imagem	-> sua imagem será enviada para o dockerhub
+docker pull nome-da-imagem	-> diferente do docker run que baixa e executa, com o docker pull apenas fazemos o download da imagem
+
+
+
+########################################## NETWORKS ###############################################
+docker network create --driver bridge minha-rede				-> cria uma rede bridge com o nome "minha-rede"
+docker network ls								-> lista todas as redes disponíveis 
+docker run -t --name meu-container-de-ubuntu --network minha-rede ubuntu	-> passando a tag "--nertwork minha-rede" durante a criação do container, determinamos em qual rede o mesmo estará atrelado 
+
+################################### DOCKER-COMPOSE.YML ############################################
+exemplo de arquivo:
+
+version: '3'
+services:                                               // services pode se entender como um array de serviços, ou containers que irão compor a aplicação
+  nginx:                                                // nginx é um dos containers no caso
+    build:						// a tag build indica que ele deverá ser buildado a partir de um arquivo dockerfile
+      dockerfile: ./docker/nginx.dockerfile		// aqui informamos a localização do dockerfile
+      context: .					// aqui apontamos o contexto, ou diretório de partida, que no caso é a raiz "."
+    image: douglasq/nginx				// aqui apontamos a imagem a ser utilizada
+    container_name: nginx				// aqui escolhemos o nome do container
+    ports:						// caso a aplicação exponha uma porta, é aqui que informamos
+      - "80:80"						//
+    networks: 						// aqui setamos a network em que o container deverá ser atrelado
+      - production-network				//
+    depends_on:						// o parametro "depends_on" serve para dizer quais containers são necessários para que este funcione corretamente
+      - "node1"						// fazendo com que estas dependências subam primeiro
+      - "node2"						//
+      - "node3"						//
+							// os demais services "mongodb", "node1", "node2" e "node3", seguem a mesma estrutura
+  mongodb:						//
+    image: mongo					// ao final do arquivo criamos/definimos a/as conexões a serem utilizadas no contexto deste docker-compose
+    networks:						//
+      - production-network				//	
+
+  node1:
+    build:
+      dockerfile: ./docker/alura-books.dockerfile
+      context: .
+    image: douglasq/alura-books
+    container_name: alura-books1
+    ports:
+      - "3000"
+    networks:
+      - production-network
+    depends_on:
+      - "mongodb"
+
+
+  node2:
+    build:
+      dockerfile: ./docker/alura-books.dockerfile
+      context: .
+    image: douglasq/alura-books
+    container_name: alura-books2
+    ports:
+      - "3000"
+    networks:
+      - production-network
+    depends_on:
+      - "mongodb"
+
+  node3:
+    build:
+      dockerfile: ./docker/alura-books.dockerfile
+      context: .
+    image: douglasq/alura-books
+    container_name: alura-books3
+    ports:
+      - "3000"
+    networks:
+      - production-network
+    depends_on:
+      - "mongodb"
+
+networks:						// através do objeto networks criamos as conexões
+  production-network: 					// aqui é atribuido o nome da conexão
+    driver: bridge					// aqui é atribuido o driver, que na maioria dos casos é usado o bridge
+
+
+############################################  DOCKER-COMPOSE (COMANDOS) ####################################################################################
+
+docker-compose build					// constroi imagens a partir dos arquivos dockerfile contidos no docker-compose.yml, baixando todas dependencias
+
+docker-compose up -d					// levanta todos os serviços apontados no docker-compose.yml
+
+docker-compose down					// para todos containers e os remove
+
+docker-compose ls					// lista containers do compose
+
+docker exec -it nome-container-1 ping nome-container-2	// faz um container pingar outro container dentro da network, para validar conexão
+
+docker-compose restart					// reinicia todos os serviços 
